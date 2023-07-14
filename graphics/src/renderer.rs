@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 pub struct Renderer<B: Backend, Theme> {
     backend: B,
     primitives: Vec<Primitive<B::Primitive>>,
+    primitives_buffer: Vec<Primitive<B::Primitive>>,
     theme: PhantomData<Theme>,
 }
 
@@ -28,6 +29,7 @@ impl<B: Backend, T> Renderer<B, T> {
         Self {
             backend,
             primitives: Vec::new(),
+            primitives_buffer: Vec::new(),
             theme: PhantomData,
         }
     }
@@ -39,7 +41,7 @@ impl<B: Backend, T> Renderer<B, T> {
 
     /// Enqueues the given [`Primitive`] in the [`Renderer`] for drawing.
     pub fn draw_primitive(&mut self, primitive: Primitive<B::Primitive>) {
-        self.primitives.push(primitive);
+        self.primitives_buffer.push(primitive);
     }
 
     /// Runs the given closure with the [`Backend`] and the recorded primitives
@@ -53,7 +55,7 @@ impl<B: Backend, T> Renderer<B, T> {
 
     /// Starts recording a new layer.
     pub fn start_layer(&mut self) -> Vec<Primitive<B::Primitive>> {
-        std::mem::take(&mut self.primitives)
+        std::mem::take(&mut self.primitives_buffer)
     }
 
     /// Ends the recording of a layer.
@@ -62,14 +64,15 @@ impl<B: Backend, T> Renderer<B, T> {
         primitives: Vec<Primitive<B::Primitive>>,
         bounds: Rectangle,
     ) {
-        let layer = std::mem::replace(&mut self.primitives, primitives);
+        let layer = std::mem::replace(&mut self.primitives_buffer, primitives);
 
-        self.primitives.push(Primitive::group(layer).clip(bounds));
+        self.primitives_buffer
+            .push(Primitive::group(layer).clip(bounds));
     }
 
     /// Starts recording a translation.
     pub fn start_translation(&mut self) -> Vec<Primitive<B::Primitive>> {
-        std::mem::take(&mut self.primitives)
+        std::mem::take(&mut self.primitives_buffer)
     }
 
     /// Ends the recording of a translation.
@@ -78,9 +81,9 @@ impl<B: Backend, T> Renderer<B, T> {
         primitives: Vec<Primitive<B::Primitive>>,
         translation: Vector,
     ) {
-        let layer = std::mem::replace(&mut self.primitives, primitives);
+        let layer = std::mem::replace(&mut self.primitives_buffer, primitives);
 
-        self.primitives
+        self.primitives_buffer
             .push(Primitive::group(layer).translate(translation));
     }
 }
@@ -123,7 +126,7 @@ impl<B: Backend, T> iced_core::Renderer for Renderer<B, T> {
         quad: renderer::Quad,
         background: impl Into<Background>,
     ) {
-        self.primitives.push(Primitive::Quad {
+        self.primitives_buffer.push(Primitive::Quad {
             bounds: quad.bounds,
             background: background.into(),
             border_radius: quad.border_radius.into(),
@@ -133,7 +136,8 @@ impl<B: Backend, T> iced_core::Renderer for Renderer<B, T> {
     }
 
     fn clear(&mut self) {
-        self.primitives.clear();
+        std::mem::swap(&mut self.primitives, &mut self.primitives_buffer);
+        self.primitives_buffer.clear();
     }
 }
 
@@ -202,7 +206,7 @@ where
     }
 
     fn fill_text(&mut self, text: Text<'_, Self::Font>) {
-        self.primitives.push(Primitive::Text {
+        self.primitives_buffer.push(Primitive::Text {
             content: text.content.to_string(),
             bounds: text.bounds,
             size: text.size,
@@ -227,7 +231,8 @@ where
     }
 
     fn draw(&mut self, handle: image::Handle, bounds: Rectangle) {
-        self.primitives.push(Primitive::Image { handle, bounds })
+        self.primitives_buffer
+            .push(Primitive::Image { handle, bounds })
     }
 }
 
@@ -245,7 +250,7 @@ where
         color: Option<Color>,
         bounds: Rectangle,
     ) {
-        self.primitives.push(Primitive::Svg {
+        self.primitives_buffer.push(Primitive::Svg {
             handle,
             color,
             bounds,
