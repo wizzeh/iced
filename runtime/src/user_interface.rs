@@ -428,9 +428,6 @@ where
         style: &renderer::Style,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        // TODO: Move to shell level (?)
-        renderer.clear();
-
         let viewport = Rectangle::with_size(self.bounds);
 
         let base_cursor = if let Some(mut overlay) = self
